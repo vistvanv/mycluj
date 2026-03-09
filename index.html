@@ -303,6 +303,10 @@
       .sidebar { max-height: none; }
       .map-wrap { min-height: 500px; }
     }
+
+    .ol-layer canvas {
+  filter: grayscale(100%);
+}
   </style>
 </head>
 <body>
@@ -433,10 +437,7 @@
     let playTimer = null;
 
     const grayscaleLayer = new ol.layer.Tile({
-      source: new ol.source.XYZ({
-        url: 'https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}.png',
-        attributions: '© Stadia Maps © OpenMapTiles © OpenStreetMap contributors'
-      })
+      source: new ol.source.OSM()
     });
 
     const visibleSource = new ol.source.Vector();
