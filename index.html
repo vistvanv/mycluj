@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cluj Complaints Explorer</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v10.6.1/ol.css" />
+  <script src="https://cdn.jsdelivr.net/npm/ol@v10.6.1/dist/ol.js"></script>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #121936;
+      --panel-2: #0f1530;
+      --border: #26315d;
+      --text: #e9edff;
+      --muted: #9eabd8;
+      --accent: #7aa2ff;
+      --accent-2: #59d0a7;
+      --shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+      --radius: 18px;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      gap: 14px;
+      padding: 14px;
+    }
+
+    .sidebar {
+      background: linear-gradient(180deg, var(--panel), var(--panel-2));
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      padding: 18px;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .main {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 14px;
+      min-width: 0;
+    }
+
+    .topbar, .bottom {
+      background: linear-gradient(180deg, var(--panel), var(--panel-2));
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      padding: 14px 16px;
+    }
+
+    .map-wrap {
+      position: relative;
+      min-height: 540px;
+      border-radius: 24px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+    }
+
+    #map { width: 100%; height: 100%; background: #d8d8d8; }
+
+    .ol-layer:first-child canvas {
+      filter: grayscale(100%);
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 1.35rem;
+      line-height: 1.2;
+    }
+
+    h2 {
+      margin: 0 0 10px;
+      font-size: 0.96rem;
+      color: var(--muted);
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    p, label, small, .note { color: var(--muted); }
+    .muted { color: var(--muted); }
+
+    .section {
+      padding: 14px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.02);
+      border-radius: var(--radius);
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .kpi {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 12px;
+    }
+
+    .kpi .label { font-size: 0.8rem; color: var(--muted); }
+    .kpi .value { font-size: 1.45rem; font-weight: 800; margin-top: 4px; }
+
+    select, input[type="date"] {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: #0c1230;
+      color: var(--text);
+      outline: none;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+
+    button {
+      border: 1px solid var(--border);
+      background: #16214a;
+      color: var(--text);
+      border-radius: 12px;
+      padding: 10px 12px;
+      cursor: pointer;
+      transition: 0.2s ease;
+    }
+
+    button:hover { background: #1d2b61; }
+    button.active { background: var(--accent); color: #08101e; border-color: transparent; }
+
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .stats-list, .legend-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .stat-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .stat-row:last-child { border-bottom: 0; }
+
+    .bar {
+      height: 8px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 6px;
+    }
+
+    .bar > span {
+      display: block;
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      border-radius: 999px;
+    }
+
+    .timeline-chart {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 6px;
+      align-items: end;
+      height: 120px;
+      margin-top: 8px;
+    }
+
+    .timeline-bar {
+      background: linear-gradient(180deg, var(--accent), var(--accent-2));
+      border-radius: 8px 8px 0 0;
+      min-height: 4px;
+      position: relative;
+    }
+
+    .timeline-bar span {
+      position: absolute;
+      bottom: -20px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.72rem;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 4px;
+      flex: none;
+    }
+
+    .map-badge {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      z-index: 5;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      max-width: 60%;
+      justify-content: flex-end;
+    }
+
+    .badge {
+      background: rgba(11, 16, 32, 0.82);
+      color: var(--text);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(10px);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 0.82rem;
+    }
+
+    .footer-note {
+      font-size: 0.85rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    @media (max-width: 1100px) {
+      body {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto;
+      }
+      .sidebar { max-height: none; }
+      .map-wrap { min-height: 500px; }
+    }
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <section class="section">
+      <h2>View mode</h2>
+      <div class="btn-row">
+        <button class="view-btn active" data-view="clusters">Clusters</button>
+        <button class="view-btn" data-view="heatmap">Heatmap</button>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Filters</h2>
+      <div style="display:grid; gap:10px;">
+        <div>
+          <label for="categoryFilter">Title</label>
+          <select id="categoryFilter">
+            <option value="__all__">All titles</option>
+          </select>
+        </div>
+        <div class="grid-2">
+          <div>
+            <label for="fromDate">From date</label>
+            <input id="fromDate" type="date" />
+          </div>
+          <div>
+            <label for="toDate">To date</label>
+            <input id="toDate" type="date" />
+          </div>
+        </div>
+        <div>
+          <label for="timeSlider">Timeline month</label>
+          <input id="timeSlider" type="range" min="0" max="0" value="0" />
+          <div id="timeLabel" class="muted" style="margin-top:6px;">All months</div>
+        </div>
+        <div class="btn-row">
+          <button id="playBtn">Play</button>
+          <button id="resetTimelineBtn">Reset timeline</button>
+          <button id="fitBtn">Fit to visible data</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Overview</h2>
+      <div class="kpi-grid">
+        <div class="kpi">
+          <div class="label">Visible incidents</div>
+          <div class="value" id="visibleCount">0</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Titles</div>
+          <div class="value" id="visibleCategories">0</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Months</div>
+          <div class="value" id="visibleMonths">0</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Clusters in view</div>
+          <div class="value" id="visibleClusters">0</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Top titles in view</h2>
+      <div id="categoryStats" class="stats-list"></div>
+    </section>
+
+    <section class="section">
+      <h2>Monthly activity</h2>
+      <div id="timelineChart" class="timeline-chart"></div>
+    </section>
+
+    <section class="section">
+      <h2>Legend</h2>
+      <div id="legendList" class="legend-list"></div>
+    </section>
+  </aside>
+
+  <main class="main">
+    <section class="topbar">
+      <div>
+        <h1 style="margin-bottom:4px;">Interactive civic issue map</h1>
+        <div class="muted">Cluster colors reflect the dominant title in each cluster. Heatmap mode uses the same active filters.</div>
+      </div>
+    </section>
+
+    <section class="map-wrap">
+      <div id="map"></div>
+      <div class="map-badge">
+        <div class="badge" id="badgeMode">Mode: Clusters</div>
+        <div class="badge" id="badgeDate">Dates: all</div>
+        <div class="badge">Data: complaints_2025.geojson</div>
+      </div>
+    </section>
+
+    <section class="bottom">
+      <div class="footer-note">
+        The dashboard recomputes stats from the current filters and current map extent. Pan or zoom the map to compare areas, then switch between clusters and heatmap.
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const CATEGORY_COLORS = [
+      '#7aa2ff', '#59d0a7', '#ffb86b', '#ff7b91', '#be95ff', '#4dd0e1', '#ffd166', '#ef476f', '#06d6a0', '#8ecae6', '#90be6d', '#f94144'
+    ];
+
+    let rawRecords = [];
+    let filteredFeatures = [];
+    let availableMonths = [];
+    let currentMonthIndex = -1;
+    let currentViewMode = 'clusters';
+    let playTimer = null;
+
+    const grayscaleLayer = new ol.layer.Tile({
+      source: new ol.source.OSM()
+    });
+
+    const visibleSource = new ol.source.Vector();
+    const clusterSource = new ol.source.Cluster({ distance: 40, source: visibleSource });
+
+    const clustersLayer = new ol.layer.Vector({
+      source: clusterSource,
+      style: clusterStyleFunction,
+      visible: true
+    });
+
+    const heatmapLayer = new ol.layer.Heatmap({
+      source: visibleSource,
+      blur: 22,
+      radius: 10,
+      weight: feature => feature.get('heatWeight') || 0.5,
+      visible: false
+    });
+
+    const map = new ol.Map({
+      target: 'map',
+      layers: [grayscaleLayer, heatmapLayer, clustersLayer],
+      view: new ol.View({
+        center: ol.proj.fromLonLat([23.59, 46.77]),
+        zoom: 12
+      }),
+      controls: ol.control.defaults.defaults({ attributionOptions: { collapsible: true } })
+    });
+
+    const els = {
+      categoryFilter: document.getElementById('categoryFilter'),
+      fromDate: document.getElementById('fromDate'),
+      toDate: document.getElementById('toDate'),
+      timeSlider: document.getElementById('timeSlider'),
+      timeLabel: document.getElementById('timeLabel'),
+      playBtn: document.getElementById('playBtn'),
+      resetTimelineBtn: document.getElementById('resetTimelineBtn'),
+      fitBtn: document.getElementById('fitBtn'),
+      visibleCount: document.getElementById('visibleCount'),
+      visibleCategories: document.getElementById('visibleCategories'),
+      visibleMonths: document.getElementById('visibleMonths'),
+      visibleClusters: document.getElementById('visibleClusters'),
+      categoryStats: document.getElementById('categoryStats'),
+      timelineChart: document.getElementById('timelineChart'),
+      badgeMode: document.getElementById('badgeMode'),
+      badgeDate: document.getElementById('badgeDate'),
+      legendList: document.getElementById('legendList')
+    };
+
+    function parseDateFlexible(value) {
+      if (!value) return null;
+      if (value instanceof Date) return value;
+      const str = String(value).trim();
+      const m = str.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/);
+      if (m) {
+        return new Date(
+          Number(m[3]),
+          Number(m[2]) - 1,
+          Number(m[1]),
+          Number(m[4] || 0),
+          Number(m[5] || 0),
+          Number(m[6] || 0)
+        );
+      }
+      const d = new Date(str);
+      return Number.isNaN(d.getTime()) ? null : d;
+    }
+
+    function toISODate(date) {
+      return date ? new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10) : '';
+    }
+
+    function monthKey(date) {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      return `${y}-${m}`;
+    }
+
+    function monthLabel(key) {
+      const [y, m] = key.split('-').map(Number);
+      return new Date(y, m - 1, 1).toLocaleString('en', { month: 'short', year: 'numeric' });
+    }
+
+    function normalizeRecord(record) {
+      if (!record) return null;
+      const lat = Number(record.latitude ?? record.lat ?? record.y);
+      const lon = Number(record.longitude ?? record.lng ?? record.lon ?? record.x);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+      const created = parseDateFlexible(record.createdon || record.date || record.datetime || record.created_at);
+      const category = (record.titlu || record.category || 'Unknown').trim?.() || 'Unknown';
+      return {
+        ...record,
+        latitude: lat,
+        longitude: lon,
+        category,
+        createdon: record.createdon || record.date || '',
+        createdDate: created,
+        monthKey: created ? monthKey(created) : 'Unknown'
+      };
+    }
+
+    function getUnique(arr) {
+      return [...new Set(arr.filter(Boolean))];
+    }
+
+    function categoryColor(category) {
+      const categories = getUnique(rawRecords.map(r => r.category)).sort();
+      const idx = Math.max(0, categories.indexOf(category));
+      return CATEGORY_COLORS[idx % CATEGORY_COLORS.length];
+    }
+
+    const clusterStyleCache = {};
+    function clusterStyleFunction(feature) {
+      const members = feature.get('features') || [];
+      const size = members.length;
+
+      const counts = new Map();
+      for (const f of members) {
+        const cat = f.get('category') || 'Unknown';
+        counts.set(cat, (counts.get(cat) || 0) + 1);
+      }
+
+      let dominantCategory = 'Unknown';
+      let dominantCount = 0;
+      for (const [cat, count] of counts.entries()) {
+        if (count > dominantCount) {
+          dominantCategory = cat;
+          dominantCount = count;
+        }
+      }
+
+      const color = categoryColor(dominantCategory);
+      const key = `${size}|${color}`;
+
+      if (!clusterStyleCache[key]) {
+        const radius = Math.max(12, Math.min(30, 10 + Math.log2(size + 1) * 5));
+        clusterStyleCache[key] = new ol.style.Style({
+          image: new ol.style.Circle({
+            radius,
+            fill: new ol.style.Fill({ color }),
+            stroke: new ol.style.Stroke({ color: 'rgba(255,255,255,0.95)', width: 2 })
+          }),
+          text: new ol.style.Text({
+            text: String(size),
+            fill: new ol.style.Fill({ color: '#08101e' }),
+            font: '700 13px Inter, sans-serif'
+          })
+        });
+      }
+
+      return clusterStyleCache[key];
+    }
+
+    function makeFeature(record) {
+      const feature = new ol.Feature({
+        geometry: new ol.geom.Point(ol.proj.fromLonLat([record.longitude, record.latitude])),
+        ...record
+      });
+      feature.set('heatWeight', 0.7);
+      return feature;
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function populateFilters() {
+      const categories = getUnique(rawRecords.map(r => r.category)).sort((a, b) => a.localeCompare(b));
+      els.categoryFilter.innerHTML = '<option value="__all__">All titles</option>' + categories.map(v => `<option>${escapeHtml(v)}</option>`).join('');
+
+      const dated = rawRecords.filter(r => r.createdDate).sort((a, b) => a.createdDate - b.createdDate);
+      if (dated.length) {
+        els.fromDate.value = toISODate(dated[0].createdDate);
+        els.toDate.value = toISODate(dated[dated.length - 1].createdDate);
+      }
+
+      availableMonths = getUnique(rawRecords.filter(r => r.createdDate).map(r => r.monthKey)).sort();
+      els.timeSlider.min = 0;
+      els.timeSlider.max = String(Math.max(0, availableMonths.length - 1));
+      els.timeSlider.value = '0';
+      currentMonthIndex = -1;
+      updateTimeLabel();
+    }
+
+    function renderLegend() {
+      const categories = getUnique(rawRecords.map(r => r.category)).sort((a, b) => a.localeCompare(b));
+      els.legendList.innerHTML = '';
+      categories.forEach(cat => {
+        const row = document.createElement('div');
+        row.className = 'legend-item';
+        row.innerHTML = `<span class="swatch" style="background:${categoryColor(cat)}"></span><span>${escapeHtml(cat)}</span>`;
+        els.legendList.appendChild(row);
+      });
+      const heatRow = document.createElement('div');
+      heatRow.className = 'legend-item';
+      heatRow.style.marginTop = '6px';
+      heatRow.innerHTML = `<span class="swatch" style="background:#59d0a7"></span><span>Heatmap intensity</span>`;
+      els.legendList.appendChild(heatRow);
+    }
+
+    function filterRecords() {
+      const category = els.categoryFilter.value;
+      const fromDate = els.fromDate.value ? new Date(els.fromDate.value + 'T00:00:00') : null;
+      const toDate = els.toDate.value ? new Date(els.toDate.value + 'T23:59:59') : null;
+      const maxMonth = currentMonthIndex >= 0 ? availableMonths[currentMonthIndex] : null;
+
+      return rawRecords.filter(r => {
+        if (category !== '__all__' && r.category !== category) return false;
+        if (fromDate && (!r.createdDate || r.createdDate < fromDate)) return false;
+        if (toDate && (!r.createdDate || r.createdDate > toDate)) return false;
+        if (maxMonth && r.monthKey > maxMonth) return false;
+        return true;
+      });
+    }
+
+    function refreshMapData() {
+      const records = filterRecords();
+      filteredFeatures = records.map(makeFeature);
+      visibleSource.clear();
+      visibleSource.addFeatures(filteredFeatures);
+      updateDashboard();
+    }
+
+    function renderStats(records, key, container, maxRows) {
+      container.innerHTML = '';
+      const counts = new Map();
+      records.forEach(r => counts.set(r[key], (counts.get(r[key]) || 0) + 1));
+      const arr = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, maxRows);
+      const total = records.length || 1;
+      if (!arr.length) {
+        container.innerHTML = '<div class="muted">No visible data.</div>';
+        return;
+      }
+      arr.forEach(([label, value]) => {
+        const div = document.createElement('div');
+        div.className = 'stat-row';
+        const pct = (value / total) * 100;
+        div.innerHTML = `
+          <div>
+            <div>${escapeHtml(String(label || 'Unknown'))}</div>
+            <div class="bar"><span style="width:${pct}%"></span></div>
+          </div>
+          <div>${value}</div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function renderTimeline(records) {
+      const counts = new Map();
+      records.filter(r => r.createdDate).forEach(r => counts.set(r.monthKey, (counts.get(r.monthKey) || 0) + 1));
+      const months = availableMonths.length ? availableMonths : [...counts.keys()].sort();
+      const max = Math.max(1, ...months.map(m => counts.get(m) || 0));
+      els.timelineChart.innerHTML = '';
+      months.forEach(month => {
+        const value = counts.get(month) || 0;
+        const bar = document.createElement('div');
+        bar.className = 'timeline-bar';
+        bar.style.height = `${Math.max(4, (value / max) * 100)}%`;
+        bar.title = `${monthLabel(month)}: ${value}`;
+        if (currentMonthIndex >= 0 && availableMonths[currentMonthIndex] === month) {
+          bar.style.outline = '2px solid rgba(255,255,255,0.85)';
+        }
+        bar.innerHTML = `<span>${month.split('-')[1]}</span>`;
+        els.timelineChart.appendChild(bar);
+      });
+    }
+
+    function buildDateBadge() {
+      const from = els.fromDate.value || 'min';
+      const to = els.toDate.value || 'max';
+      const monthCap = currentMonthIndex >= 0 ? `, timeline ≤ ${monthLabel(availableMonths[currentMonthIndex])}` : '';
+      return `${from} → ${to}${monthCap}`;
+    }
+
+    function updateDashboard() {
+      const extent = map.getView().calculateExtent(map.getSize());
+      const inExtent = filteredFeatures.filter(f => ol.extent.containsCoordinate(extent, f.getGeometry().getCoordinates()));
+      const records = inExtent.map(f => f.getProperties());
+      const clustersInView = clusterSource.getFeatures().filter(f => ol.extent.intersects(extent, f.getGeometry().getExtent())).length;
+
+      els.visibleCount.textContent = String(records.length);
+      els.visibleCategories.textContent = String(getUnique(records.map(r => r.category)).length);
+      els.visibleMonths.textContent = String(getUnique(records.map(r => r.monthKey)).filter(v => v && v !== 'Unknown').length);
+      els.visibleClusters.textContent = String(clustersInView);
+
+      renderStats(records, 'category', els.categoryStats, 8);
+      renderTimeline(records);
+      els.badgeDate.textContent = `Dates: ${buildDateBadge()}`;
+    }
+
+    function updateTimeLabel() {
+      els.timeLabel.textContent = currentMonthIndex >= 0 ? `Showing up to ${monthLabel(availableMonths[currentMonthIndex])}` : 'All months in selected date range';
+    }
+
+    function fitToVisible() {
+      const extent = visibleSource.getExtent();
+      if (extent && !ol.extent.isEmpty(extent)) {
+        map.getView().fit(extent, { padding: [50, 50, 50, 50], duration: 400, maxZoom: 16 });
+      }
+    }
+
+    function setViewMode(mode) {
+      currentViewMode = mode;
+      clustersLayer.setVisible(mode === 'clusters');
+      heatmapLayer.setVisible(mode === 'heatmap');
+      els.badgeMode.textContent = `Mode: ${mode.charAt(0).toUpperCase()}${mode.slice(1)}`;
+      document.querySelectorAll('.view-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.view === mode));
+    }
+
+    function setData(records) {
+      rawRecords = records.map(normalizeRecord).filter(Boolean);
+      populateFilters();
+      renderLegend();
+      refreshMapData();
+      fitToVisible();
+    }
+
+    function stopPlaying() {
+      if (playTimer) clearInterval(playTimer);
+      playTimer = null;
+      els.playBtn.textContent = 'Play';
+    }
+
+    document.querySelectorAll('.view-btn').forEach(btn => btn.addEventListener('click', () => setViewMode(btn.dataset.view)));
+    [els.categoryFilter, els.fromDate, els.toDate].forEach(el => el.addEventListener('change', refreshMapData));
+    els.timeSlider.addEventListener('input', () => {
+      currentMonthIndex = Number(els.timeSlider.value);
+      updateTimeLabel();
+      refreshMapData();
+    });
+    els.resetTimelineBtn.addEventListener('click', () => {
+      currentMonthIndex = -1;
+      els.timeSlider.value = '0';
+      updateTimeLabel();
+      refreshMapData();
+      stopPlaying();
+    });
+    els.fitBtn.addEventListener('click', fitToVisible);
+    els.playBtn.addEventListener('click', () => {
+      if (playTimer) {
+        stopPlaying();
+        return;
+      }
+      if (!availableMonths.length) return;
+      if (currentMonthIndex < 0) currentMonthIndex = 0;
+      els.timeSlider.value = String(currentMonthIndex);
+      updateTimeLabel();
+      refreshMapData();
+      els.playBtn.textContent = 'Pause';
+      playTimer = setInterval(() => {
+        currentMonthIndex += 1;
+        if (currentMonthIndex >= availableMonths.length) {
+          stopPlaying();
+          return;
+        }
+        els.timeSlider.value = String(currentMonthIndex);
+        updateTimeLabel();
+        refreshMapData();
+      }, 900);
+    });
+
+    async function loadGeoJSON() {
+      const response = await fetch('./complaints_2025.geojson');
+      if (!response.ok) throw new Error(`Failed to load complaints_2025.geojson (${response.status})`);
+      const data = await response.json();
+      if (data.type === 'FeatureCollection' && Array.isArray(data.features)) {
+        const records = data.features.map(f => {
+          const coords = f.geometry?.type === 'Point' ? f.geometry.coordinates : null;
+          return {
+            ...(f.properties || {}),
+            longitude: coords?.[0],
+            latitude: coords?.[1]
+          };
+        });
+        setData(records);
+        return;
+      }
+      throw new Error('Expected a Point FeatureCollection in complaints_2025.geojson');
+    }
+
+    loadGeoJSON().catch(err => {
+      console.error(err);
+      alert(err.message);
+    });
+
+    map.on('moveend', updateDashboard);
+    setViewMode('clusters');
+  </script>
+</body>
+</html>
