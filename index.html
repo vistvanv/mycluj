@@ -73,8 +73,52 @@
       background: #d8d8d8;
     }
 
-    .ol-layer:first-child canvas {
-      filter: grayscale(100%);
+    .ol-popup {
+      position: absolute;
+      background: rgba(11, 16, 32, 0.96);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 12px 14px;
+      min-width: 260px;
+      max-width: 320px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .ol-popup:after {
+      content: "";
+      position: absolute;
+      left: 24px;
+      bottom: -10px;
+      border-width: 10px 10px 0 10px;
+      border-style: solid;
+      border-color: rgba(11, 16, 32, 0.96) transparent transparent transparent;
+    }
+
+    .popup-title {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .popup-subtitle {
+      color: var(--muted);
+      font-size: 0.88rem;
+      margin-bottom: 10px;
+    }
+
+    .popup-list {
+      display: grid;
+      gap: 6px;
+    }
+
+    .popup-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      font-size: 0.9rem;
+      align-items: center;
     }
 
     h2 {
@@ -192,13 +236,19 @@
       font-size: 0.92rem;
     }
 
+    .legend-title {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
     .map-legend {
       position: absolute;
       left: 14px;
       bottom: 14px;
       z-index: 30;
-      width: 280px;
-      max-height: 55%;
+      width: 320px;
+      max-height: 60%;
       overflow: auto;
       background: rgba(11, 16, 32, 0.9);
       border: 1px solid var(--border);
@@ -292,47 +342,48 @@
 <body>
   <aside class="sidebar">
     <section class="section">
-      <h2>View mode</h2>
+      <h2>Mod vizualizare</h2>
       <div class="btn-row">
         <button class="view-btn active" data-view="clusters">Clusters</button>
         <button class="view-btn" data-view="heatmap">Heatmap</button>
+        <button class="view-btn" data-view="cartiere">Cartiere</button>
       </div>
     </section>
 
     <section class="section">
-      <h2>Filters</h2>
+      <h2>Filtre</h2>
       <div style="display:grid; gap:10px;">
         <div>
-          <label for="categoryFilter">Sesizari</label>
+          <label for="categoryFilter">Sesizări</label>
           <select id="categoryFilter">
-            <option value="__all__">Toate sesizarile</option>
+            <option value="__all__">Toate sesizările</option>
           </select>
         </div>
         <div class="grid-2">
           <div>
-            <label for="fromDate">From date</label>
+            <label for="fromDate">De la</label>
             <input id="fromDate" type="date" />
           </div>
           <div>
-            <label for="toDate">To date</label>
+            <label for="toDate">Până la</label>
             <input id="toDate" type="date" />
           </div>
         </div>
         <div>
-          <label for="timeSlider">Timeline month</label>
+          <label for="timeSlider">Luna</label>
           <input id="timeSlider" type="range" min="0" max="0" value="0" />
-          <div id="timeLabel" class="muted" style="margin-top:6px;">All months in selected date range</div>
+          <div id="timeLabel" class="muted" style="margin-top:6px;">Toate lunile din intervalul selectat</div>
         </div>
         <div class="btn-row">
           <button id="playBtn">Play</button>
           <button id="resetTimelineBtn">Reset timeline</button>
-          <button id="fitBtn">Fit to visible data</button>
+          <button id="fitBtn">Fit la datele vizibile</button>
         </div>
       </div>
     </section>
 
     <section class="section">
-      <h2>Monthly activity</h2>
+      <h2>Activitate lunară</h2>
       <div id="timelineChart" class="timeline-chart"></div>
     </section>
 
@@ -340,7 +391,7 @@
       <h2>Overview</h2>
       <div class="kpi-grid">
         <div class="kpi">
-          <div class="label">Sesizari</div>
+          <div class="label">Sesizări</div>
           <div class="value" id="visibleCount">0</div>
         </div>
         <div class="kpi">
@@ -352,14 +403,14 @@
           <div class="value" id="visibleMonths">0</div>
         </div>
         <div class="kpi">
-          <div class="label">Clustere in vedere</div>
-          <div class="value" id="visibleClusters">0</div>
+          <div class="label">Cartiere</div>
+          <div class="value" id="visibleNeighborhoods">0</div>
         </div>
       </div>
     </section>
 
     <section class="section">
-      <h2>Numar de sesizari</h2>
+      <h2>Număr de sesizări</h2>
       <div id="categoryStats" class="stats-list"></div>
     </section>
   </aside>
@@ -367,10 +418,11 @@
   <main class="main">
     <section class="map-wrap">
       <div id="map"></div>
-      <button id="legendToggleBtn" class="map-legend-toggle">Hide legend</button>
+      <div id="popup" class="ol-popup" style="display:none;"></div>
+      <button id="legendToggleBtn" class="map-legend-toggle">Ascunde legenda</button>
       <div id="mapLegend" class="map-legend">
         <div class="map-legend-head">
-          <h2 style="margin:0;">Legend</h2>
+          <h2 style="margin:0;">Legendă</h2>
         </div>
         <div id="legendList" class="legend-list"></div>
       </div>
@@ -383,6 +435,14 @@
       '#fb8500', '#90be6d', '#b5179e', '#7209b7', '#06d6a0', '#ef476f'
     ];
 
+    const CHOROPLETH_RAMP = [
+      'rgba(0, 200, 0, 0.25)',
+      'rgba(173, 255, 47, 0.25)',
+      'rgba(255, 215, 0, 0.25)',
+      'rgba(255, 140, 0, 0.25)',
+      'rgba(220, 20, 60, 0.25)'
+    ];
+
     let rawRecords = [];
     let filteredFeatures = [];
     let availableMonths = [];
@@ -390,19 +450,26 @@
     let currentViewMode = 'clusters';
     let playTimer = null;
     let sortedCategories = [];
+    let neighborhoodNames = [];
+    let neighborhoodStatsMap = new Map();
+    let selectedNeighborhoodName = null;
 
-    const grayscaleLayer = new ol.layer.Tile({
-      source: new ol.source.OSM()
+    const basemapLayer = new ol.layer.Tile({
+      source: new ol.source.XYZ({
+        url: 'https://{a-d}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png'
+      })
     });
 
+    const neighborhoodSource = new ol.source.Vector();
     const visibleSource = new ol.source.Vector();
     const clusterSource = new ol.source.Cluster({ distance: 40, source: visibleSource });
 
-    const clustersLayer = new ol.layer.Vector({
-      source: clusterSource,
-      style: clusterStyleFunction,
-      visible: true,
-      zIndex: 20
+    const popupEl = document.getElementById('popup');
+    const popupOverlay = new ol.Overlay({
+      element: popupEl,
+      positioning: 'bottom-left',
+      offset: [12, -12],
+      stopEvent: false
     });
 
     const heatmapLayer = new ol.layer.Heatmap({
@@ -412,15 +479,35 @@
       weight: feature => feature.get('heatWeight') || 0.5,
       visible: false,
       opacity: 0.95,
-      gradient: [
-        '#000004', '#1b0c41', '#4f0c6b', '#781c6d', '#a52c60', '#cf4446', '#ed6925', '#fb9b06', '#f7d13d', '#fcfdbf'
-      ],
+      gradient: ['#000004', '#1b0c41', '#4f0c6b', '#781c6d', '#a52c60', '#cf4446', '#ed6925', '#fb9b06', '#f7d13d', '#fcfdbf'],
       zIndex: 10
+    });
+
+    const neighborhoodOutlineLayer = new ol.layer.Vector({
+      source: neighborhoodSource,
+      style: neighborhoodOutlineStyle,
+      visible: true,
+      zIndex: 12
+    });
+
+    const choroplethLayer = new ol.layer.Vector({
+      source: neighborhoodSource,
+      style: choroplethStyleFunction,
+      visible: false,
+      zIndex: 13
+    });
+
+    const clustersLayer = new ol.layer.Vector({
+      source: clusterSource,
+      style: clusterStyleFunction,
+      visible: true,
+      zIndex: 20
     });
 
     const map = new ol.Map({
       target: 'map',
-      layers: [grayscaleLayer, heatmapLayer, clustersLayer],
+      layers: [basemapLayer, heatmapLayer, choroplethLayer, neighborhoodOutlineLayer, clustersLayer],
+      overlays: [popupOverlay],
       view: new ol.View({
         center: ol.proj.fromLonLat([23.59, 46.77]),
         zoom: 12
@@ -440,7 +527,7 @@
       visibleCount: document.getElementById('visibleCount'),
       visibleCategories: document.getElementById('visibleCategories'),
       visibleMonths: document.getElementById('visibleMonths'),
-      visibleClusters: document.getElementById('visibleClusters'),
+      visibleNeighborhoods: document.getElementById('visibleNeighborhoods'),
       categoryStats: document.getElementById('categoryStats'),
       timelineChart: document.getElementById('timelineChart'),
       legendList: document.getElementById('legendList'),
@@ -473,6 +560,10 @@
       return new Date(y, m - 1, 1).toLocaleString('ro', { month: 'short', year: 'numeric' });
     }
 
+    function getNeighborhoodName(obj) {
+      return obj.cartiere || obj.cartier || obj.name || obj.NAME || obj.den || obj.DENUMIRE || obj.nume || obj.NUME || null;
+    }
+
     function normalizeRecord(record) {
       if (!record) return null;
       const lat = Number(record.latitude ?? record.lat ?? record.y);
@@ -480,11 +571,13 @@
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
       const created = parseDateFlexible(record.createdon || record.date || record.datetime || record.created_at);
       const category = (record.titlu || record.category || 'Unknown').trim?.() || 'Unknown';
+      const cartiere = record.cartiere ?? record.cartier ?? 'N/A';
       return {
         ...record,
         latitude: lat,
         longitude: lon,
         category,
+        cartiere,
         createdon: record.createdon || record.date || '',
         createdDate: created,
         monthKey: created ? monthKey(created) : 'Unknown'
@@ -500,13 +593,81 @@
       return CATEGORY_COLORS[idx % CATEGORY_COLORS.length];
     }
 
+    function neighborhoodOutlineStyle(feature) {
+      const props = feature.getProperties();
+      const label = getNeighborhoodName(props) || '';
+      const selected = selectedNeighborhoodName && selectedNeighborhoodName === label;
+      return new ol.style.Style({
+        stroke: new ol.style.Stroke({ color: 'rgba(0, 0, 0, 0.95)', width: selected ? 4 : 3, lineDash: [12, 8] }),
+        fill: null,
+        text: label ? new ol.style.Text({
+          text: String(label),
+          font: '600 12px Inter, sans-serif',
+          fill: new ol.style.Fill({ color: 'rgba(0, 0, 0, 0.95)' }),
+          stroke: new ol.style.Stroke({ color: 'rgba(255,255,255,0.95)', width: 3 }),
+          overflow: true,
+          placement: 'point'
+        }) : undefined
+      });
+    }
+
+    function computeNeighborhoodFeatureValues() {
+      return neighborhoodSource.getFeatures().map(f => f.get('issueCount') || 0).filter(v => v > 0);
+    }
+
+    function computeQuantileBreaks(values) {
+      const sorted = [...values].sort((a, b) => a - b);
+      if (!sorted.length) return [0, 0, 0, 0];
+      return [
+        sorted[Math.floor((sorted.length - 1) * 0.2)] || 0,
+        sorted[Math.floor((sorted.length - 1) * 0.4)] || 0,
+        sorted[Math.floor((sorted.length - 1) * 0.6)] || 0,
+        sorted[Math.floor((sorted.length - 1) * 0.8)] || 0
+      ];
+    }
+
+    function classifyCount(value, values) {
+      if (!values.length || value <= 0) return CHOROPLETH_RAMP[0];
+      const [q1, q2, q3, q4] = computeQuantileBreaks(values);
+      if (value <= q1) return CHOROPLETH_RAMP[0];
+      if (value <= q2) return CHOROPLETH_RAMP[1];
+      if (value <= q3) return CHOROPLETH_RAMP[2];
+      if (value <= q4) return CHOROPLETH_RAMP[3];
+      return CHOROPLETH_RAMP[4];
+    }
+
+    function choroplethStyleFunction(feature) {
+      const props = feature.getProperties();
+      const neighborhood = getNeighborhoodName(props);
+      const values = computeNeighborhoodFeatureValues();
+      const count = feature.get('issueCount') || 0;
+      const selected = selectedNeighborhoodName && selectedNeighborhoodName === neighborhood;
+      const fillColor = neighborhood ? classifyCount(count, values) : 'rgba(255,255,255,0.02)';
+      const labelText = neighborhood ? `${neighborhood}\n${count}` : String(count);
+
+      return new ol.style.Style({
+        stroke: new ol.style.Stroke({ color: 'rgba(0, 0, 0, 0.95)', width: selected ? 4 : 3, lineDash: [12, 8] }),
+        fill: new ol.style.Fill({ color: fillColor }),
+        text: new ol.style.Text({
+          text: labelText,
+          font: '600 12px Inter, sans-serif',
+          fill: new ol.style.Fill({ color: 'rgba(0, 0, 0, 0.95)' }),
+          stroke: new ol.style.Stroke({ color: 'rgba(255,255,255,0.95)', width: 3 }),
+          overflow: true,
+          placement: 'point',
+          textAlign: 'center',
+          justify: 'center'
+        })
+      });
+    }
+
     const clusterStyleCache = {};
     function clusterStyleFunction(feature) {
       const members = feature.get('features') || [];
       const size = members.length;
-      const activeCategory = els.categoryFilter ? els.categoryFilter.value : '__all__';
-
+      const activeCategory = els.categoryFilter.value;
       let color;
+
       if (activeCategory && activeCategory !== '__all__') {
         color = categoryColor(activeCategory);
       } else {
@@ -564,16 +725,34 @@
         .replaceAll("'", '&#039;');
     }
 
+    function formatPopup(neighborhood) {
+      const stats = neighborhoodStatsMap.get(neighborhood);
+      if (!stats) return '';
+      const topFive = [...stats.categories.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+      const rows = topFive.map(([cat, count]) => `<div class="popup-row"><span>${escapeHtml(cat)}</span><strong>${count}</strong></div>`).join('');
+      return `
+        <div class="popup-title">${escapeHtml(neighborhood)}</div>
+        <div class="popup-subtitle">${stats.count} sesizări</div>
+        <div class="popup-list">${rows || '<div class="muted">Fără categorii disponibile.</div>'}</div>
+      `;
+    }
+
+    function closePopup() {
+      popupEl.style.display = 'none';
+      popupOverlay.setPosition(undefined);
+      selectedNeighborhoodName = null;
+      neighborhoodOutlineLayer.changed();
+      choroplethLayer.changed();
+    }
+
     function populateFilters() {
       sortedCategories = getUnique(rawRecords.map(r => r.category)).sort((a, b) => a.localeCompare(b));
-      els.categoryFilter.innerHTML = '<option value="__all__">Toate sesizarile</option>' + sortedCategories.map(v => `<option>${escapeHtml(v)}</option>`).join('');
-
+      els.categoryFilter.innerHTML = '<option value="__all__">Toate sesizările</option>' + sortedCategories.map(v => `<option>${escapeHtml(v)}</option>`).join('');
       const dated = rawRecords.filter(r => r.createdDate).sort((a, b) => a.createdDate - b.createdDate);
       if (dated.length) {
         els.fromDate.value = toISODate(dated[0].createdDate);
         els.toDate.value = toISODate(dated[dated.length - 1].createdDate);
       }
-
       availableMonths = getUnique(rawRecords.filter(r => r.createdDate).map(r => r.monthKey)).sort();
       els.timeSlider.min = 0;
       els.timeSlider.max = String(Math.max(0, availableMonths.length - 1));
@@ -584,17 +763,46 @@
 
     function renderLegend() {
       els.legendList.innerHTML = '';
+
+      if (currentViewMode === 'cartiere') {
+        const values = computeNeighborhoodFeatureValues();
+        const [q1, q2, q3, q4] = computeQuantileBreaks(values);
+        const ranges = [
+          `0 – ${q1}`,
+          `${q1 + 1} – ${q2}`,
+          `${q2 + 1} – ${q3}`,
+          `${q3 + 1} – ${q4}`,
+          `${q4 + 1}+`
+        ];
+
+        const title = document.createElement('div');
+        title.className = 'legend-title';
+        title.textContent = 'Număr sesizări / cartier';
+        els.legendList.appendChild(title);
+
+        CHOROPLETH_RAMP.forEach((color, idx) => {
+          const row = document.createElement('div');
+          row.className = 'legend-item';
+          row.innerHTML = `<span class="swatch" style="background:${color}"></span><span>${ranges[idx]}</span>`;
+          els.legendList.appendChild(row);
+        });
+        return;
+      }
+
       sortedCategories.forEach(cat => {
         const row = document.createElement('div');
         row.className = 'legend-item';
         row.innerHTML = `<span class="swatch" style="background:${categoryColor(cat)}"></span><span>${escapeHtml(cat)}</span>`;
         els.legendList.appendChild(row);
       });
-      const heatRow = document.createElement('div');
-      heatRow.className = 'legend-item';
-      heatRow.style.marginTop = '6px';
-      heatRow.innerHTML = `<span class="swatch" style="background:#cf4446"></span><span>Heatmap intensity</span>`;
-      els.legendList.appendChild(heatRow);
+
+      if (currentViewMode === 'heatmap') {
+        const heatRow = document.createElement('div');
+        heatRow.className = 'legend-item';
+        heatRow.style.marginTop = '6px';
+        heatRow.innerHTML = `<span class="swatch" style="background:#cf4446"></span><span>Intensitate heatmap</span>`;
+        els.legendList.appendChild(heatRow);
+      }
     }
 
     function filterRecords() {
@@ -602,7 +810,6 @@
       const fromDate = els.fromDate.value ? new Date(els.fromDate.value + 'T00:00:00') : null;
       const toDate = els.toDate.value ? new Date(els.toDate.value + 'T23:59:59') : null;
       const maxMonth = currentMonthIndex >= 0 ? availableMonths[currentMonthIndex] : null;
-
       return rawRecords.filter(r => {
         if (category !== '__all__' && r.category !== category) return false;
         if (fromDate && (!r.createdDate || r.createdDate < fromDate)) return false;
@@ -612,14 +819,44 @@
       });
     }
 
+    function applyNeighborhoodStats(records) {
+      const valid = records.filter(r => {
+        const n = (r.cartiere || '').trim();
+        return n && n !== 'N/A';
+      });
+      const statMap = new Map();
+      valid.forEach(r => {
+        const n = r.cartiere.trim();
+        if (!statMap.has(n)) statMap.set(n, { count: 0, categories: new Map() });
+        const s = statMap.get(n);
+        s.count += 1;
+        s.categories.set(r.category, (s.categories.get(r.category) || 0) + 1);
+      });
+      neighborhoodStatsMap = statMap;
+      neighborhoodNames = [...statMap.keys()].sort((a, b) => a.localeCompare(b));
+
+      neighborhoodSource.getFeatures().forEach(feature => {
+        const n = getNeighborhoodName(feature.getProperties());
+        const stat = n ? statMap.get(n) : null;
+        feature.set('issueCount', stat?.count || 0);
+      });
+    }
+
     function refreshMapData() {
       const records = filterRecords();
       filteredFeatures = records.map(makeFeature);
       visibleSource.clear();
       visibleSource.addFeatures(filteredFeatures);
+      applyNeighborhoodStats(records);
       Object.keys(clusterStyleCache).forEach(k => delete clusterStyleCache[k]);
       clustersLayer.changed();
+      choroplethLayer.changed();
+      neighborhoodOutlineLayer.changed();
+      renderLegend();
       updateDashboard();
+      if (selectedNeighborhoodName && !neighborhoodStatsMap.has(selectedNeighborhoodName)) {
+        closePopup();
+      }
       setTimeout(() => map.updateSize(), 0);
     }
 
@@ -630,7 +867,7 @@
       const arr = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, maxRows);
       const total = records.length || 1;
       if (!arr.length) {
-        container.innerHTML = '<div class="muted">No visible data.</div>';
+        container.innerHTML = '<div class="muted">Nu există date vizibile.</div>';
         return;
       }
       arr.forEach(([label, value]) => {
@@ -649,7 +886,6 @@
         const byCat = monthMap.get(r.monthKey);
         byCat.set(r.category, (byCat.get(r.category) || 0) + 1);
       });
-
       const months = availableMonths.length ? availableMonths : [...monthMap.keys()].sort();
       const maxMonthTotal = Math.max(1, ...months.map(month => {
         const byCat = monthMap.get(month) || new Map();
@@ -661,17 +897,14 @@
         const byCat = monthMap.get(month) || new Map();
         const total = [...byCat.values()].reduce((a, b) => a + b, 0);
         const scaledHeight = total > 0 ? Math.max(4, (total / maxMonthTotal) * 92) : 0;
-
         const wrap = document.createElement('div');
         wrap.className = 'timeline-month';
-
         const stack = document.createElement('div');
         stack.className = 'timeline-stack';
         stack.title = `${monthLabel(month)}: ${total}`;
         if (currentMonthIndex >= 0 && availableMonths[currentMonthIndex] === month) {
           stack.style.outline = '2px solid rgba(255,255,255,0.85)';
         }
-
         if (total > 0) {
           sortedCategories.forEach(category => {
             const value = byCat.get(category) || 0;
@@ -684,11 +917,9 @@
             stack.appendChild(segment);
           });
         }
-
         const label = document.createElement('span');
         label.textContent = month;
         label.title = monthLabel(month);
-
         wrap.appendChild(stack);
         wrap.appendChild(label);
         els.timelineChart.appendChild(wrap);
@@ -699,22 +930,28 @@
       const extent = map.getView().calculateExtent(map.getSize());
       const inExtent = filteredFeatures.filter(f => ol.extent.containsCoordinate(extent, f.getGeometry().getCoordinates()));
       const records = inExtent.map(f => f.getProperties());
-      const clustersInView = clusterSource.getFeatures().filter(f => ol.extent.intersects(extent, f.getGeometry().getExtent())).length;
+      const neighborhoodsInStats = getUnique(records.map(r => r.cartiere).filter(v => v && v !== 'N/A')).length;
 
       els.visibleCount.textContent = String(records.length);
       els.visibleCategories.textContent = String(getUnique(records.map(r => r.category)).length);
       els.visibleMonths.textContent = String(getUnique(records.map(r => r.monthKey)).filter(v => v && v !== 'Unknown').length);
-      els.visibleClusters.textContent = String(clustersInView);
-
+      els.visibleNeighborhoods.textContent = String(neighborhoodsInStats);
       renderStats(records, 'category', els.categoryStats, 6);
       renderTimeline(records);
     }
 
     function updateTimeLabel() {
-      els.timeLabel.textContent = currentMonthIndex >= 0 ? `Showing up to ${monthLabel(availableMonths[currentMonthIndex])}` : 'All months in selected date range';
+      els.timeLabel.textContent = currentMonthIndex >= 0 ? `Până la ${monthLabel(availableMonths[currentMonthIndex])}` : 'Toate lunile din intervalul selectat';
     }
 
     function fitToVisible() {
+      if (currentViewMode === 'cartiere') {
+        const extent = neighborhoodSource.getExtent();
+        if (extent && !ol.extent.isEmpty(extent)) {
+          map.getView().fit(extent, { padding: [50, 50, 50, 50], duration: 400, maxZoom: 14 });
+        }
+        return;
+      }
       const extent = visibleSource.getExtent();
       if (extent && !ol.extent.isEmpty(extent)) {
         map.getView().fit(extent, { padding: [50, 50, 50, 50], duration: 400, maxZoom: 16 });
@@ -725,13 +962,18 @@
       currentViewMode = mode;
       clustersLayer.setVisible(mode === 'clusters');
       heatmapLayer.setVisible(mode === 'heatmap');
+      choroplethLayer.setVisible(mode === 'cartiere');
+      neighborhoodOutlineLayer.setVisible(mode !== 'cartiere');
       document.querySelectorAll('.view-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.view === mode));
+      renderLegend();
+      choroplethLayer.changed();
+      neighborhoodOutlineLayer.changed();
+      if (mode !== 'cartiere') closePopup();
     }
 
     function setData(records) {
       rawRecords = records.map(normalizeRecord).filter(Boolean);
       populateFilters();
-      renderLegend();
       refreshMapData();
       fitToVisible();
     }
@@ -785,21 +1027,47 @@
     });
     els.legendToggleBtn.addEventListener('click', () => {
       const hidden = els.mapLegend.classList.toggle('hidden');
-      els.legendToggleBtn.textContent = hidden ? 'Show legend' : 'Hide legend';
+      els.legendToggleBtn.textContent = hidden ? 'Arată legenda' : 'Ascunde legenda';
     });
 
-    async function loadGeoJSON() {
+    map.on('singleclick', evt => {
+      if (currentViewMode !== 'cartiere') return;
+      let hitFeature = null;
+      map.forEachFeatureAtPixel(evt.pixel, (feature, layer) => {
+        if (layer === choroplethLayer) {
+          hitFeature = feature;
+          return true;
+        }
+        return false;
+      });
+
+      if (!hitFeature) {
+        closePopup();
+        return;
+      }
+
+      const neighborhood = getNeighborhoodName(hitFeature.getProperties());
+      if (!neighborhood || !neighborhoodStatsMap.has(neighborhood)) {
+        closePopup();
+        return;
+      }
+
+      selectedNeighborhoodName = neighborhood;
+      popupEl.innerHTML = formatPopup(neighborhood);
+      popupEl.style.display = 'block';
+      popupOverlay.setPosition(evt.coordinate);
+      choroplethLayer.changed();
+      neighborhoodOutlineLayer.changed();
+    });
+
+    async function loadComplaints() {
       const response = await fetch('./complaints_2025.geojson');
       if (!response.ok) throw new Error(`Failed to load complaints_2025.geojson (${response.status})`);
       const data = await response.json();
       if (data.type === 'FeatureCollection' && Array.isArray(data.features)) {
         const records = data.features.map(f => {
           const coords = f.geometry?.type === 'Point' ? f.geometry.coordinates : null;
-          return {
-            ...(f.properties || {}),
-            longitude: coords?.[0],
-            latitude: coords?.[1]
-          };
+          return { ...(f.properties || {}), longitude: coords?.[0], latitude: coords?.[1] };
         });
         setData(records);
         return;
@@ -807,13 +1075,27 @@
       throw new Error('Expected a Point FeatureCollection in complaints_2025.geojson');
     }
 
-    loadGeoJSON().catch(err => {
-      console.error(err);
-      alert(err.message);
-    });
+    async function loadNeighborhoods() {
+      try {
+        const response = await fetch('./cartiere_cluj_.geojson');
+        if (!response.ok) return;
+        const data = await response.json();
+        const format = new ol.format.GeoJSON();
+        const features = format.readFeatures(data, { dataProjection: 'EPSG:4326', featureProjection: 'EPSG:3857' });
+        neighborhoodSource.clear();
+        neighborhoodSource.addFeatures(features);
+      } catch (err) {
+        console.warn('Could not load cartiere_cluj_.geojson', err);
+      }
+    }
 
-    map.on('moveend', updateDashboard);
-    setViewMode('clusters');
+    Promise.allSettled([loadNeighborhoods(), loadComplaints()]).then(results => {
+      const complaintsResult = results[1];
+      if (complaintsResult.status === 'rejected') {
+        console.error(complaintsResult.reason);
+        alert(complaintsResult.reason.message || String(complaintsResult.reason));
+      }
+    });
   </script>
 </body>
 </html>
